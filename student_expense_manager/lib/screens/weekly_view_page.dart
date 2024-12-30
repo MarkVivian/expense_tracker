@@ -21,38 +21,47 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Stack(
       children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Weekly View', style: Preferences.headlineStyle),
-                  const SizedBox(height: 16),
-                  ..._buildDayCards(),
-                ],
+        Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Weekly View', style: Preferences.headlineStyle),
+                      const SizedBox(height: 16),
+                      ..._buildDayCards(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        Positioned(
+          bottom: 16,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _currentDate = DateTime.now();
+                });
+              },
+              child: const Icon(Icons.refresh),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Preferences.accentColor,
+                shape: const CircleBorder(),
+                padding: const EdgeInsets.all(20),
               ),
             ),
           ),
         ),
-        ElevatedButton(
-          onPressed: () {
-            // Refresh functionality to be added later
-            setState(() {
-              _currentDate = DateTime.now();
-            });
-          },
-          child: const Icon(Icons.refresh),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Preferences.accentColor,
-            shape: const CircleBorder(),
-            padding: const EdgeInsets.all(20),
-          ),
-        ),
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -79,15 +88,15 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> {
       color: isCurrentDay
           ? Preferences.currentColor
           : isPastDay
-              ? Preferences.pastColor
-              : Preferences.futureColor,
+          ? Preferences.pastColor
+          : Preferences.futureColor,
       child: ExpansionTile(
         title: Text(day, style: Preferences.majorTextStyle),
         initiallyExpanded: isCurrentDay,
         children: [
           ...List.generate(
             Preferences.mealTimes.length,
-            (index) => _buildMealTile(dayIndex, index, isPastDay || (isCurrentDay && _isPassedMealTime(index))),
+                (index) => _buildMealTile(dayIndex, index, isPastDay || (isCurrentDay && _isPassedMealTime(index))),
           ),
         ],
       ),
@@ -96,8 +105,8 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> {
 
   Widget _buildMealTile(int dayIndex, int mealIndex, bool isPast) {
     final meal = Preferences.mealTimes[mealIndex];
-    final isCurrentMeal = dayIndex == _currentDate.weekday - 1 && 
-                          mealIndex == _getCurrentMealIndex();
+    final isCurrentMeal = dayIndex == _currentDate.weekday - 1 &&
+        mealIndex == _getCurrentMealIndex();
 
     return ExpansionTile(
       title: Text(meal, style: isPast ? Preferences.bodyStyle.copyWith(color: Preferences.pastColor) : Preferences.bodyStyle),
@@ -105,7 +114,7 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> {
       children: [
         ...List.generate(
           3, // Number of food items per meal
-          (index) => _buildFoodItem(dayIndex, mealIndex, index, isPast),
+              (index) => _buildFoodItem(dayIndex, mealIndex, index, isPast),
         ),
       ],
     );

@@ -20,15 +20,39 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   Future<void> _initializeAndLoadData() async {
-    await StorageUtil.createJsonIfNotExists();
-    await _loadUserData();
+    try {
+      await StorageUtil.createJsonIfNotExists();
+      await _loadUserData();
+    } catch (e) {
+      _showErrorDialog('Failed to initialize data: $e');
+    }
   }
 
   Future<void> _loadUserData() async {
-    final data = await StorageUtil.loadData();
-    setState(() {
-      _userData = data;
-    });
+    try {
+      final data = await StorageUtil.loadData();
+      setState(() {
+        _userData = data;
+      });
+    } catch (e) {
+      _showErrorDialog('Failed to load data: $e');
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -43,7 +67,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
             const SizedBox(height: 16),
             ...List.generate(
               Preferences.preferencesCategories.length,
-              (index) => _buildExpandableRectangle(index),
+                  (index) => _buildExpandableRectangle(index),
             ),
           ],
         ),
@@ -304,10 +328,10 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                         'eachServings': eachServings,
                       };
                       StorageUtil.saveData(category, newData).then((_) {
-                        _loadUserData().then((_) {
-                          setState(() {}); // Trigger a rebuild
-                          Navigator.of(context).pop();
-                        });
+                        _loadUserData();
+                        Navigator.of(context).pop();
+                      }).catchError((error) {
+                        _showErrorDialog('Failed to save data: $error');
                       });
                     }
                   },

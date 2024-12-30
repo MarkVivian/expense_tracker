@@ -1,13 +1,37 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:universal_html/html.dart' as html;
 
 class StorageUtil {
-  // Get the local file
-  static Future<File> get _localFile async {
-    return File("./user_preferences.json");
+  // The name of the JSON file to store user preferences
+  static const String fileName = 'user_preferences.json';
+
+  /// Get the appropriate storage path based on the platform
+  static Future<String> get _storagePath async {
+    if (kIsWeb) {
+      // For web, we'll use an empty string as we'll be using localStorage
+      return '';
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      // For mobile platforms, use the app's documents directory
+      final directory = await getApplicationDocumentsDirectory();
+      return directory.path;
+    } else {
+      // For desktop platforms, use the home directory
+      final homeDir = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+      return homeDir ?? '';
+    }
   }
 
-  // Initialize the JSON structure
+  /// Get the file object for storing/retrieving data
+  static Future<File> get _storageFile async {
+    final path = await _storagePath;
+    return File('$path/$fileName');
+  }
+
+  /// Initialize the JSON structure for user preferences
   static Map<String, dynamic> _initializeJson() {
     return {
       'proteins': {},
@@ -19,73 +43,176 @@ class StorageUtil {
     };
   }
 
-  // Create the JSON file if it doesn't exist
+  /// Request storage permission for Android devices
+  static Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+      }
+      return status.isGranted;
+    }
+    return true; // Permission is assumed to be granted on other platforms
+  }
+
+  /// Create the JSON file if it doesn't exist
   static Future<void> createJsonIfNotExists() async {
-    final file = await _localFile;
-    if (!await file.exists()) {
-      final initialData = _initializeJson();
-      await file.writeAsString(json.encode(initialData));
+    if (kIsWeb) {
+      // For web, check if the data exists in localStorage
+      if (html.window.localStorage[fileName] == null) {
+        html.window.localStorage[fileName] = json.encode(_initializeJson());
+      }
+    } else {
+      // For mobile and desktop
+      if (await _requestStoragePermission()) {
+        final file = await _storageFile;
+        if (!await file.exists()) {
+          await file.writeAsString(json.encode(_initializeJson()));
+        }
+      } else {
+        throw Exception('Storage permission not granted');
+      }
     }
   }
 
-  // Save data to the JSON file
+  /// Save data to the JSON file or web storage
   static Future<void> saveData(String category, Map<String, dynamic> data) async {
-    final file = await _localFile;
     Map<String, dynamic> jsonData;
 
-    if (await file.exists()) {
-      final contents = await file.readAsString();
-      jsonData = json.decode(contents);
+    if (kIsWeb) {
+      // For web, use localStorage
+      final storedData = html.window.localStorage[fileName];
+      jsonData = storedData != null ? json.decode(storedData) : _initializeJson();
     } else {
-      jsonData = _initializeJson();
+      // For mobile and desktop
+      if (await _requestStoragePermission()) {
+        final file = await _storageFile;
+        if (await file.exists()) {
+          final contents = await file.readAsString();
+          jsonData = json.decode(contents);
+        } else {
+          jsonData = _initializeJson();
+        }
+      } else {
+        throw Exception('Storage permission not granted');
+      }
     }
 
+    // Update the JSON data with the new item
     if (!jsonData.containsKey(category.toLowerCase())) {
       jsonData[category.toLowerCase()] = {};
     }
-
     jsonData[category.toLowerCase()][data['foodName']] = data;
 
-    await file.writeAsString(json.encode(jsonData));
-  }
-
-  // Load data from the JSON file
-  static Future<Map<String, dynamic>> loadData() async {
-    final file = await _localFile;
-    if (await file.exists()) {
-      final contents = await file.readAsString();
-      return json.decode(contents);
+    // Save the updated JSON data
+    if (kIsWeb) {
+      html.window.localStorage[fileName] = json.encode(jsonData);
     } else {
-      final initialData = _initializeJson();
-      await file.writeAsString(json.encode(initialData));
-      return initialData;
+      final file = await _storageFile;
+      await file.writeAsString(json.encode(jsonData));
     }
   }
 
-  // Delete an item from the JSON file
-  static Future<void> deleteItem(String category, String itemName) async {
-    final file = await _localFile;
-    if (await file.exists()) {
-      final contents = await file.readAsString();
-      Map<String, dynamic> jsonData = json.decode(contents);
+  /// Load data from the JSON file or web storage
+  static Future<Map<String, dynamic>> loadData() async {
+    if (kIsWeb) {
+      // For web, use localStorage
+      final storedData = html.window.localStorage[fileName];
+      if (storedData != null) {
+        return json.decode(storedData);
+      } else {
+        final initialData = _initializeJson();
+        html.window.localStorage[fileName] = json.encode(initialData);
+        return initialData;
+      }
+    } else {
+      // For mobile and desktop
+      if (await _requestStoragePermission()) {
+        final file = await _storageFile;
+        if (await file.exists()) {
+          final contents = await file.readAsString();
+          return json.decode(contents);
+        } else {
+          final initialData = _initializeJson();
+          await file.writeAsString(json.encode(initialData));
+          return initialData;
+        }
+      } else {
+        throw Exception('Storage permission not granted');
+      }
+    }
+  }
 
-      if (jsonData.containsKey(category.toLowerCase())) {
-        jsonData[category.toLowerCase()].remove(itemName);
+  /// Delete an item from the JSON file or web storage
+  static Future<void> deleteItem(String category, String itemName) async {
+    Map<String, dynamic> jsonData;
+
+    if (kIsWeb) {
+      // For web, use localStorage
+      final storedData = html.window.localStorage[fileName];
+      jsonData = storedData != null ? json.decode(storedData) : _initializeJson();
+    } else {
+      // For mobile and desktop
+      if (await _requestStoragePermission()) {
+        final file = await _storageFile;
+        if (await file.exists()) {
+          final contents = await file.readAsString();
+          jsonData = json.decode(contents);
+        } else {
+          jsonData = _initializeJson();
+        }
+      } else {
+        throw Exception('Storage permission not granted');
+      }
+    }
+
+    // Remove the item from the JSON data
+    if (jsonData.containsKey(category.toLowerCase())) {
+      jsonData[category.toLowerCase()].remove(itemName);
+
+      // Save the updated JSON data
+      if (kIsWeb) {
+        html.window.localStorage[fileName] = json.encode(jsonData);
+      } else {
+        final file = await _storageFile;
         await file.writeAsString(json.encode(jsonData));
       }
     }
   }
 
-  // Update an item in the JSON file
+  /// Update an item in the JSON file or web storage
   static Future<void> updateItem(String category, String oldItemName, Map<String, dynamic> newData) async {
-    final file = await _localFile;
-    if (await file.exists()) {
-      final contents = await file.readAsString();
-      Map<String, dynamic> jsonData = json.decode(contents);
+    Map<String, dynamic> jsonData;
 
-      if (jsonData.containsKey(category.toLowerCase())) {
-        jsonData[category.toLowerCase()].remove(oldItemName);
-        jsonData[category.toLowerCase()][newData['foodName']] = newData;
+    if (kIsWeb) {
+      // For web, use localStorage
+      final storedData = html.window.localStorage[fileName];
+      jsonData = storedData != null ? json.decode(storedData) : _initializeJson();
+    } else {
+      // For mobile and desktop
+      if (await _requestStoragePermission()) {
+        final file = await _storageFile;
+        if (await file.exists()) {
+          final contents = await file.readAsString();
+          jsonData = json.decode(contents);
+        } else {
+          jsonData = _initializeJson();
+        }
+      } else {
+        throw Exception('Storage permission not granted');
+      }
+    }
+
+    // Update the item in the JSON data
+    if (jsonData.containsKey(category.toLowerCase())) {
+      jsonData[category.toLowerCase()].remove(oldItemName);
+      jsonData[category.toLowerCase()][newData['foodName']] = newData;
+
+      // Save the updated JSON data
+      if (kIsWeb) {
+        html.window.localStorage[fileName] = json.encode(jsonData);
+      } else {
+        final file = await _storageFile;
         await file.writeAsString(json.encode(jsonData));
       }
     }
