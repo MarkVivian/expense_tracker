@@ -20,13 +20,13 @@ class Preferences {
 
   static const TextStyle bodyStyle = TextStyle(
     fontSize: 16,
-    color: Colors.white70,
+    color: Colors.white,
   );
 
   static const TextStyle majorTextStyle = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.bold,
-    color: accentColor,
+    color: Colors.white,
   );
 
   // Images
@@ -62,7 +62,7 @@ class Preferences {
   ];
 
   static const List<String> servingOptions = [
-    'Unknown',
+    'NA',
     '1/2',
     '1',
     '1 1/2',

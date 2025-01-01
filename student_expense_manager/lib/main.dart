@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'utils/preferences.dart';
- 
+
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Expense Manager',
+      title: 'My Flutter App',
       theme: ThemeData(
         primaryColor: Preferences.primaryColor,
         scaffoldBackgroundColor: Preferences.backgroundColor,
@@ -26,4 +26,4 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
+// todo : change the layout of user preference instead of the table format to use the rectangle where data is stored in 2 x 2 2 at the top 2 at the bottom.

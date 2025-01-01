@@ -4,20 +4,19 @@ import 'user_preferences_page.dart';
 import 'weekly_view_page.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentPage = 1;
+  int _currentPage = 1;  // Change this line to start with Weekly View
 
-  final List<String> _pageTitles = ['User Preferences', 'Weekly View', 'Page Three'];
+  final List<String> _pageTitles = ['User Preferences', 'Weekly View'];
   final List<Widget> _pages = [
     const UserPreferencesPage(),
     const WeeklyViewPage(),
-    Center(child: Text('Page Three', style: Preferences.bodyStyle)),
   ];
 
   @override
@@ -39,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
         items: [
           _buildNavItem(Preferences.userPreferencesIcon, 0),
           _buildNavItem(Preferences.weeklyViewIcon, 1),
-          _buildNavItem(Preferences.pageThreeIcon, 2),
         ],
         selectedItemColor: Preferences.accentColor,
         unselectedItemColor: Preferences.secondaryColor,

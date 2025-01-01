@@ -45,14 +45,7 @@ class StorageUtil {
 
   /// Request storage permission for Android devices
   static Future<bool> _requestStoragePermission() async {
-    if (Platform.isAndroid) {
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-      }
-      return status.isGranted;
-    }
-    return true; // Permission is assumed to be granted on other platforms
+    return await checkAndRequestPermission();
   }
 
   /// Create the JSON file if it doesn't exist
@@ -217,4 +210,19 @@ class StorageUtil {
       }
     }
   }
+
+  static Future<bool> checkAndRequestPermission() async {
+    if (kIsWeb) {
+      return true; // Web doesn't need storage permission
+    }
+    if (Platform.isAndroid) {
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+      }
+      return status.isGranted;
+    }
+    return true; // For iOS and other platforms, assume permission is granted
+  }
 }
+

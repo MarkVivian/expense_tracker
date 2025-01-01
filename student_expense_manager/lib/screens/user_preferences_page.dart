@@ -12,6 +12,8 @@ class UserPreferencesPage extends StatefulWidget {
 class _UserPreferencesPageState extends State<UserPreferencesPage> {
   int _expandedIndex = -1;
   Map<String, dynamic> _userData = {};
+  bool _isLoading = true;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -20,11 +22,27 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   Future<void> _initializeAndLoadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
     try {
+      bool hasPermission = await StorageUtil.checkAndRequestPermission();
+      if (!hasPermission) {
+        throw Exception('Storage permission not granted');
+      }
+
       await StorageUtil.createJsonIfNotExists();
       await _loadUserData();
     } catch (e) {
-      _showErrorDialog('Failed to initialize data: $e');
+      setState(() {
+        _errorMessage = 'Failed to initialize data: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -35,35 +53,42 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
         _userData = data;
       });
     } catch (e) {
-      _showErrorDialog('Failed to load data: $e');
+      setState(() {
+        _errorMessage = 'Failed to load data: $e';
+      });
     }
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Error'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            child: Text('OK'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+
+    if (_errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage, style: TextStyle(color: Colors.white)),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _initializeAndLoadData,
+              child: Text('Retry'),
+              style: ElevatedButton.styleFrom(backgroundColor: Preferences.accentColor),
+            ),
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('User Preferences', style: Preferences.headlineStyle),
+            Text('User Preferences', style: Preferences.headlineStyle.copyWith(color: Colors.white)),
             const SizedBox(height: 16),
             ...List.generate(
               Preferences.preferencesCategories.length,
@@ -84,7 +109,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
       child: Column(
         children: [
           ListTile(
-            title: Text(category, style: Preferences.majorTextStyle),
+            title: Text(category, style: Preferences.majorTextStyle.copyWith(color: Colors.white)),
             trailing: Icon(
               isExpanded ? Icons.expand_less : Icons.expand_more,
               color: Colors.white,
@@ -121,7 +146,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
 
   Widget _buildSubcategory(String subcategory) {
     return ExpansionTile(
-      title: Text(subcategory, style: Preferences.bodyStyle),
+      title: Text(subcategory, style: Preferences.bodyStyle.copyWith(color: Colors.white)),
       children: [
         ..._buildCategoryItems('Breakfast - $subcategory'),
       ],
@@ -138,15 +163,13 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
       widgets.add(_buildTableHeader());
       widgets.add(
         Container(
-          height: 200, // Set a fixed height for the scrollable area
+          height: 200,
           decoration: BoxDecoration(
             border: Border.all(color: Preferences.accentColor),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              children: items.entries.map((entry) => _buildItemRow(category, entry.key, entry.value)).toList(),
-            ),
+          child: ListView(
+            children: items.entries.map((entry) => _buildSwipeableItemRow(category, entry.key, entry.value)).toList(),
           ),
         ),
       );
@@ -165,44 +188,51 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          Expanded(child: Text('Food Item', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Expanded(child: Text('Cost', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Expanded(child: Text('Servings', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Expanded(child: Text('Each Serving', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          SizedBox(width: 80), // Space for action buttons
+          Expanded(flex: 2, child: Text('Food Item', style: Preferences.bodyStyle.copyWith(color: Colors.white), textAlign: TextAlign.center)),
+          Expanded(child: Text('Cost', style: Preferences.bodyStyle.copyWith(color: Colors.white), textAlign: TextAlign.center)),
+          Expanded(child: Text('Total Servings', style: Preferences.bodyStyle.copyWith(color: Colors.white), textAlign: TextAlign.center)),
+          Expanded(child: Text('Each Serving', style: Preferences.bodyStyle.copyWith(color: Colors.white), textAlign: TextAlign.center)),
         ],
       ),
     );
   }
 
-  Widget _buildItemRow(String category, String itemName, Map<String, dynamic> item) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Preferences.accentColor)),
+  Widget _buildSwipeableItemRow(String category, String itemName, Map<String, dynamic> item) {
+    return Dismissible(
+      key: Key(itemName),
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerLeft,
+        padding: EdgeInsets.only(left: 16),
+        child: Icon(Icons.delete, color: Colors.white),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          Expanded(child: Text(item['foodName'] as String, style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Expanded(child: Text('${item['price']}', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Expanded(child: Text('${item['totalServings']}', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Expanded(child: Text('${item['eachServings']}', style: Preferences.bodyStyle, textAlign: TextAlign.center)),
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.edit, color: Preferences.accentColor),
-                onPressed: () => _showEditItemDialog(category, itemName, item),
-              ),
-              IconButton(
-                icon: Icon(Icons.delete, color: Preferences.accentColor),
-                onPressed: () => _showDeleteConfirmationDialog(category, itemName),
-              ),
-            ],
-          ),
-        ],
+      secondaryBackground: Container(
+        color: Colors.blue,
+        alignment: Alignment.centerRight,
+        padding: EdgeInsets.only(right: 16),
+        child: Icon(Icons.edit, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          return await _showDeleteConfirmationDialog(category, itemName);
+        } else {
+          _showEditItemDialog(category, itemName, item);
+          return false;
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: Preferences.accentColor)),
+        ),
+        child: Row(
+          children: [
+            Expanded(flex: 2, child: Text(item['foodName'] as String, style: Preferences.bodyStyle.copyWith(color: Colors.white))),
+            Expanded(child: Text(item['price'].toString(), style: Preferences.bodyStyle.copyWith(color: Colors.white))),
+            Expanded(child: Text(item['totalServings'], style: Preferences.bodyStyle.copyWith(color: Colors.white))),
+            Expanded(child: Text(item['eachServings'], style: Preferences.bodyStyle.copyWith(color: Colors.white))),
+          ],
+        ),
       ),
     );
   }
@@ -231,8 +261,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
     final formKey = GlobalKey<FormState>();
     String foodName = existingItem?['foodName'] ?? '';
     double price = existingItem?['price'] ?? 0;
-    String totalServings = existingItem?['totalServings'] ?? 'Unknown';
-    String eachServings = existingItem?['eachServings'] ?? 'Unknown';
+    String totalServings = existingItem?['totalServings'] ?? 'NA';
+    String eachServings = existingItem?['eachServings'] ?? 'NA';
 
     showDialog(
       context: context,
@@ -240,7 +270,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text(existingItem == null ? 'Add $category Item' : 'Edit $category Item'),
+              title: Text(existingItem == null ? 'Add $category Item' : 'Edit $category Item', style: TextStyle(color: Colors.white)),
               content: Form(
                 key: formKey,
                 child: SingleChildScrollView(
@@ -249,49 +279,53 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                     children: [
                       TextFormField(
                         initialValue: foodName,
-                        decoration: const InputDecoration(labelText: 'Food Name'),
+                        decoration: const InputDecoration(labelText: 'Food Name', labelStyle: TextStyle(color: Colors.white)),
+                        style: TextStyle(color: Colors.white),
                         validator: (value) => value!.isEmpty ? 'Please enter a food name' : null,
                         onSaved: (value) => foodName = value!,
                       ),
                       TextFormField(
                         initialValue: price.toString(),
-                        decoration: const InputDecoration(labelText: 'Price'),
+                        decoration: const InputDecoration(labelText: 'Price', labelStyle: TextStyle(color: Colors.white)),
+                        style: TextStyle(color: Colors.white),
                         keyboardType: TextInputType.number,
                         validator: (value) => value!.isEmpty ? 'Please enter a price' : null,
                         onSaved: (value) => price = double.parse(value!),
                       ),
                       DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: 'Total Servings'),
+                        decoration: const InputDecoration(labelText: 'Total Servings', labelStyle: TextStyle(color: Colors.white)),
                         value: totalServings,
                         items: Preferences.servingOptions.map((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
-                            child: Text(value),
+                            child: Text(value, style: TextStyle(color: Colors.white)),
                           );
                         }).toList(),
                         onChanged: (value) {
                           setState(() {
                             totalServings = value!;
-                            if (totalServings == 'Unknown' || totalServings == 'All') {
+                            if (totalServings == 'NA' || totalServings == 'All') {
                               eachServings = totalServings;
                             }
                           });
                         },
+                        dropdownColor: Preferences.primaryColor,
                       ),
                       DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: 'Each Serving'),
+                        decoration: const InputDecoration(labelText: 'Each Serving', labelStyle: TextStyle(color: Colors.white)),
                         value: eachServings,
                         items: Preferences.servingOptions.map((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
-                            child: Text(value),
+                            child: Text(value, style: TextStyle(color: Colors.white)),
                           );
                         }).toList(),
-                        onChanged: totalServings == 'Unknown' || totalServings == 'All'
+                        onChanged: totalServings == 'NA' || totalServings == 'All'
                             ? null
                             : (value) => setState(() => eachServings = value!),
+                        dropdownColor: Preferences.primaryColor,
                       ),
-                      if (totalServings == 'Unknown')
+                      if (totalServings == 'NA')
                         const Padding(
                           padding: EdgeInsets.only(top: 8.0),
                           child: Text(
@@ -313,11 +347,11 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
               ),
               actions: [
                 TextButton(
-                  child: const Text('Cancel'),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white)),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 TextButton(
-                  child: const Text('Save'),
+                  child: const Text('Save', style: TextStyle(color: Colors.white)),
                   onPressed: () {
                     if (formKey.currentState!.validate()) {
                       formKey.currentState!.save();
@@ -337,6 +371,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                   },
                 ),
               ],
+              backgroundColor: Preferences.primaryColor,
             );
           },
         );
@@ -344,32 +379,56 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
     );
   }
 
-  void _showDeleteConfirmationDialog(String category, String itemName) {
-    showDialog(
+  Future<bool> _showDeleteConfirmationDialog(String category, String itemName) async {
+    return await showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete Item'),
-          content: Text('Are you sure you want to delete "$itemName"?'),
+          title: const Text('Delete Item', style: TextStyle(color: Colors.white)),
+          content: Text('Are you sure you want to delete "$itemName"?', style: TextStyle(color: Colors.white)),
           actions: [
             TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+              onPressed: () => Navigator.of(context).pop(false),
             ),
             TextButton(
-              child: const Text('Delete'),
+              child: const Text('Delete', style: TextStyle(color: Colors.white)),
               onPressed: () {
                 StorageUtil.deleteItem(category, itemName).then((_) {
                   _loadUserData().then((_) {
-                    setState(() {}); // Trigger a rebuild
-                    Navigator.of(context).pop();
+                    setState(() {});
+                    Navigator.of(context).pop(true);
                   });
                 });
               },
             ),
           ],
+          backgroundColor: Preferences.primaryColor,
         );
       },
+    ) ?? false;
+  }
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Error', style: TextStyle(color: Colors.white)),
+        content: Text(message, style: TextStyle(color: Colors.white)),
+        backgroundColor: Preferences.primaryColor,
+        actions: [
+          TextButton(
+            child: Text('OK', style: TextStyle(color: Preferences.accentColor)),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: Text('Retry', style: TextStyle(color: Preferences.accentColor)),
+            onPressed: () {
+              Navigator.of(context).pop();
+              _initializeAndLoadData();
+            },
+          ),
+        ],
+      ),
     );
   }
 }
