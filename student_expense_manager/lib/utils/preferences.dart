@@ -56,9 +56,9 @@ class Preferences {
     'Proteins',
     'Carbohydrates',
     'Vegetables',
-    'Breakfast',
-    'Snacks',
-    'Extra Expenses'
+    'Breakfast combos',
+    'Meal combos',
+    'Extra Expenses (e.g. fifa, drinking)'
   ];
 
   static const List<String> servingOptions = [

@@ -112,7 +112,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
     final List<Widget> widgets = [];
 
     widgets.add(
-      Container(
+      SizedBox(
         height: 300, // Fixed height for the scrollable area
         child: items.isEmpty
             ? Center(child: Text('No items added yet', style: Preferences.bodyStyle))
@@ -184,7 +184,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                           ),
                           TextSpan(
                             text: item['foodName'] as String,
-                            style: Preferences.majorTextStyle.copyWith(color: Colors.white, fontWeight: FontWeight.normal),
+                            style: Preferences.majorTextStyle.copyWith(color: Colors.white),
                           ),
                         ],
                       ),
@@ -194,7 +194,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
               ),
               SizedBox(height: 8),
               Text(
-                'Price: \$${item['price']}',
+                'Price: ${item['price']} Ksh',
                 style: Preferences.bodyStyle.copyWith(color: Colors.white),
               ),
               Text(
@@ -212,31 +212,16 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
     );
   }
 
-  List<Widget> _buildBreakfastSubcategories() {
-    return [
-      _buildSubcategory('Drink'),
-      _buildSubcategory('Carb'),
-    ];
-  }
-
-  Widget _buildSubcategory(String subcategory) {
-    return ExpansionTile(
-      title: Text(subcategory, style: Preferences.bodyStyle),
-      children: [
-        ..._buildCategoryItems('Breakfast - $subcategory'),
-      ],
-    );
-  }
 
   Widget _buildAddButton(String category) {
     return ElevatedButton(
-      child: const Icon(Icons.add),
       onPressed: () => _showAddItemDialog(category),
       style: ElevatedButton.styleFrom(
         backgroundColor: Preferences.accentColor,
         shape: const CircleBorder(),
         padding: const EdgeInsets.all(20),
       ),
+      child: const Icon(Icons.add),
     );
   }
 
@@ -269,6 +254,23 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      /*
+                      * i would like to modify the user_preference_page.dart
+mostly where the dialog box (AlertDialog) that pos up when adding /editing an items .. i need a different dialog box to open for every tab
+{
+      'proteins': {},
+      'carbohydrates': {},
+      'vegetables': {},
+      'breakfast combos': {},
+      'meal combos': {},
+      'extra expenses': {},
+    };
+lets use this i want it to remain for proteins, carbs and vegetables but for breakfast combos to appear another dialog box opens which is similar to  meal combos  and a different one for extra expenses
+
+this is what i want
+1. breakfast combos and meal combos
+let the dialog box be
+                      */
                       TextFormField(
                         initialValue: foodName,
                         decoration: const InputDecoration(labelText: 'Food Name'),
@@ -294,7 +296,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                         onChanged: (value) {
                           setState(() {
                             totalServings = value!;
-                            if (totalServings == 'Unknown' || totalServings == 'All') {
+                            if (totalServings == 'NA' || totalServings == 'All') {
                               eachServings = totalServings;
                             }
                           });
@@ -303,7 +305,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(labelText: 'Each Serving'),
                         value: eachServings,
-                        items: totalServings == 'Unknown' || totalServings == 'All'
+                        items: totalServings == 'NA' || totalServings == 'All'
                             ? [DropdownMenuItem<String>(value: totalServings, child: Text(totalServings))]
                             : Preferences.servingOptions.map((String value) {
                           return DropdownMenuItem<String>(
@@ -311,7 +313,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                             child: Text(value),
                           );
                         }).toList(),
-                        onChanged: totalServings == 'Unknown' || totalServings == 'All'
+                        onChanged: totalServings == 'NA' || totalServings == 'All'
                             ? null
                             : (value) => setState(() => eachServings = value!),
                       ),

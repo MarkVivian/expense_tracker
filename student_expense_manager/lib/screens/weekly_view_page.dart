@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../utils/preferences.dart';
 import '../utils/weekly_storage_util.dart';
+import '../utils/ai_functionality.dart';
 
 class WeeklyViewPage extends StatefulWidget {
   const WeeklyViewPage({Key? key}) : super(key: key);
@@ -24,6 +28,7 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> with SingleTickerProvid
     super.initState();
     _currentDate = DateTime.now();
     _loadWeeklyData();
+    _scheduleRefreshData();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -58,11 +63,42 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> with SingleTickerProvid
     }
   }
 
+  void _scheduleRefreshData() {
+    final now = DateTime.now();
+    final currentWeekday = now.weekday;
+    if (kDebugMode) {
+      print("the current day is $currentWeekday");
+    }
+    if (currentWeekday != DateTime.monday) {
+      // Calculate days until next Monday
+      final daysUntilMonday = 8 - currentWeekday;
+
+      // Schedule a timer to run on next Monday
+      Timer(Duration(days: daysUntilMonday), () {
+        _refreshData();
+      });
+      if (kDebugMode) {
+        print("the value of monday is ${DateTime.monday} and days until "
+            "monday are $daysUntilMonday");
+      }
+    } else {
+      // If it's already Monday, refresh data immediately
+      _refreshData();
+    }
+  }
+
   Future<void> _refreshData() async {
-    await _loadWeeklyData();
     setState(() {
       _currentDate = DateTime.now();
     });
+
+    // AIUtility will be run when the user refreshes.
+    AIUtility util = AIUtility();
+    await Future.delayed(Duration(seconds: 1));
+    util.displayAllData();
+
+    // will load the data after it has been refreshed.
+    await _loadWeeklyData();
   }
 
   @override
@@ -111,10 +147,12 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> with SingleTickerProvid
                     print('Cash submitted: $cash'); // Log the submitted cash value
                   }
                 },
-                child: Text('Submit'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Preferences.accentColor,
+                  backgroundColor: Preferences.accentColor
                 ),
+                child: Text(
+                    'Submit',
+                    style : Preferences.bodyStyle.copyWith(color: Colors.white)),
               ),
             ],
           ),
