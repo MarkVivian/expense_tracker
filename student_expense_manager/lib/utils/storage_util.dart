@@ -89,7 +89,7 @@ class StorageUtil {
   }
 
   /// Save data to the JSON file or web storage
-  static Future<void> saveData(String category, Map<String, dynamic> data) async {
+  static Future<void> saveData(String category, String key, Map<String, dynamic> data) async {
     Map<String, dynamic> jsonData;
 
     if (kIsWeb) {
@@ -115,8 +115,7 @@ class StorageUtil {
     if (!jsonData.containsKey(category.toLowerCase())) {
       jsonData[category.toLowerCase()] = {};
     }
-    jsonData[category.toLowerCase()][data['foodName']] = data;
-
+    jsonData[category.toLowerCase()][key] = data;
     // Save the updated JSON data
     if (kIsWeb) {
       html.window.localStorage[fileName] = json.encode(jsonData);

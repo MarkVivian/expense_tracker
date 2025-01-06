@@ -113,7 +113,7 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
 
     widgets.add(
       SizedBox(
-        height: 300, // Fixed height for the scrollable area
+        height: 300,
         child: items.isEmpty
             ? Center(child: Text('No items added yet', style: Preferences.bodyStyle))
             : ListView.builder(
@@ -179,11 +179,13 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                       text: TextSpan(
                         children: [
                           TextSpan(
-                            text: 'Food Name: ',
+                            text: category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)' ? 'Item: ' : 'Food Name: ',
                             style: Preferences.bodyStyle.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                           TextSpan(
-                            text: item['foodName'] as String,
+                            text: category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)'
+                                ? item['itemName']?.toString() ?? 'N/A'
+                                : item['foodName']?.toString() ?? 'N/A',
                             style: Preferences.majorTextStyle.copyWith(color: Colors.white),
                           ),
                         ],
@@ -194,17 +196,28 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
               ),
               SizedBox(height: 8),
               Text(
-                'Price: ${item['price']} Ksh',
+                'Price: ${item['price']?.toString() ?? 'N/A'} Ksh',
                 style: Preferences.bodyStyle.copyWith(color: Colors.white),
               ),
-              Text(
-                'Total Servings: ${item['totalServings']}',
-                style: Preferences.bodyStyle.copyWith(color: Colors.white),
-              ),
-              Text(
-                'Each Serving: ${item['eachServings']}',
-                style: Preferences.bodyStyle.copyWith(color: Colors.white),
-              ),
+              if (category.toLowerCase() != 'breakfast combos' &&
+                  category.toLowerCase() != 'meal combos' &&
+                  category.toLowerCase() != 'extra expenses (e.g. fifa, drinking)') ...[
+                Text(
+                  'Total Servings: ${item['totalServings']?.toString() ?? 'N/A'}',
+                  style: Preferences.bodyStyle.copyWith(color: Colors.white),
+                ),
+                Text(
+                  'Each Serving: ${item['eachServings']?.toString() ?? 'N/A'}',
+                  style: Preferences.bodyStyle.copyWith(color: Colors.white),
+                ),
+              ],
+              if (category.toLowerCase() == 'breakfast combos' ||
+                  category.toLowerCase() == 'meal combos') ...[
+                Text(
+                  'Items: ${_truncateItems(item['items'] as List<dynamic>? ?? [])}',
+                  style: Preferences.bodyStyle.copyWith(color: Colors.white),
+                ),
+              ],
             ],
           ),
         ),
@@ -212,6 +225,14 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
     );
   }
 
+  String _truncateItems(List<dynamic> items) {
+    const int maxLength = 50;
+    String itemsString = items.map((item) => item['foodName']?.toString() ?? 'N/A').join(', ');
+    if (itemsString.length <= maxLength) {
+      return itemsString;
+    }
+    return '${itemsString.substring(0, maxLength)}...';
+  }
 
   Widget _buildAddButton(String category) {
     return ElevatedButton(
@@ -234,15 +255,25 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   void _showItemDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    if (category.toLowerCase() == 'breakfast combos' || category.toLowerCase() == 'meal combos') {
+      _showComboDialog(category, oldItemName, existingItem);
+    } else if (category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)') {
+      _showExtraExpensesDialog(category, oldItemName, existingItem);
+    } else {
+      _showRegularItemDialog(category, oldItemName, existingItem);
+    }
+  }
+
+  void _showRegularItemDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
     final formKey = GlobalKey<FormState>();
-    String foodName = existingItem?['foodName'] ?? '';
-    double price = existingItem?['price'] ?? 0;
-    String totalServings = existingItem?['totalServings'] ?? Preferences.servingOptions.first;
-    String eachServings = existingItem?['eachServings'] ?? Preferences.servingOptions.first;
+    String foodName = existingItem?['foodName']?.toString() ?? '';
+    double price = existingItem?['price']?.toDouble() ?? 0;
+    String totalServings = existingItem?['totalServings']?.toString() ?? Preferences.servingOptions.first;
+    String eachServings = existingItem?['eachServings']?.toString() ?? Preferences.servingOptions.first;
 
     showDialog(
       context: context,
-      barrierDismissible: false, // This prevents the dialog from closing when clicking outside
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -254,23 +285,6 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      /*
-                      * i would like to modify the user_preference_page.dart
-mostly where the dialog box (AlertDialog) that pos up when adding /editing an items .. i need a different dialog box to open for every tab
-{
-      'proteins': {},
-      'carbohydrates': {},
-      'vegetables': {},
-      'breakfast combos': {},
-      'meal combos': {},
-      'extra expenses': {},
-    };
-lets use this i want it to remain for proteins, carbs and vegetables but for breakfast combos to appear another dialog box opens which is similar to  meal combos  and a different one for extra expenses
-
-this is what i want
-1. breakfast combos and meal combos
-let the dialog box be
-                      */
                       TextFormField(
                         initialValue: foodName,
                         decoration: const InputDecoration(labelText: 'Food Name'),
@@ -282,7 +296,7 @@ let the dialog box be
                         decoration: const InputDecoration(labelText: 'Price'),
                         keyboardType: TextInputType.number,
                         validator: (value) => value!.isEmpty ? 'Please enter a price' : null,
-                        onSaved: (value) => price = double.parse(value!),
+                        onSaved: (value) => price = double.tryParse(value!) ?? 0,
                       ),
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(labelText: 'Total Servings'),
@@ -337,23 +351,7 @@ let the dialog box be
                         'totalServings': totalServings,
                         'eachServings': eachServings,
                       };
-                      if (oldItemName != null && oldItemName != foodName) {
-                        StorageUtil.deleteItem(category, oldItemName).then((_) {
-                          StorageUtil.saveData(category, newData).then((_) {
-                            _loadUserData();
-                            Navigator.of(context).pop();
-                          }).catchError((error) {
-                            _showErrorDialog('Failed to save data: $error');
-                          });
-                        });
-                      } else {
-                        StorageUtil.saveData(category, newData).then((_) {
-                          _loadUserData();
-                          Navigator.of(context).pop();
-                        }).catchError((error) {
-                          _showErrorDialog('Failed to save data: $error');
-                        });
-                      }
+                      _saveItem(category, oldItemName, newData);
                     }
                   },
                 ),
@@ -363,6 +361,212 @@ let the dialog box be
         );
       },
     );
+  }
+
+  void _showComboDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    List<Map<String, dynamic>> comboItems = [];
+    if (existingItem != null && existingItem['items'] != null) {
+      comboItems = List<Map<String, dynamic>>.from(existingItem['items']);
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(existingItem == null ? 'Add $category' : 'Edit $category'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...comboItems.asMap().entries.map((entry) {
+                      int index = entry.key;
+                      Map<String, dynamic> item = entry.value;
+                      return ListTile(
+                        title: Text(item['foodName']?.toString() ?? 'N/A'),
+                        subtitle: Text('${item['price']?.toString() ?? 'N/A'} Ksh'),
+                        trailing: IconButton(
+                          icon: Icon(Icons.delete),
+                          onPressed: () {
+                            setState(() {
+                              comboItems.removeAt(index);
+                            });
+                          },
+                        ),
+                      );
+                    }).toList(),
+                    ElevatedButton(
+                      child: Text('Add Item'),
+                      onPressed: () async {
+                        final result = await _showAddComboItemDialog();
+                        if (result != null) {
+                          setState(() {
+                            comboItems.add(result);
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                TextButton(
+                  child: const Text('Done'),
+                  onPressed: () {
+                    if (comboItems.isNotEmpty) {
+                      final totalPrice = comboItems.fold(0.0, (sum, item) => sum + (item['price'] as double? ?? 0));
+                      final newData = {
+                        'foodName': '${comboItems[0]['foodName']?.toString() ?? 'Combo'} Combo',
+                        'price': totalPrice,
+                        'items': comboItems,
+                      };
+                      _saveItem(category, oldItemName, newData);
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>?> _showAddComboItemDialog() async {
+    final formKey = GlobalKey<FormState>();
+    String foodName = '';
+    double price = 0;
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Add Combo Item'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  decoration: const InputDecoration(labelText: 'Food Name'),
+                  validator: (value) => value!.isEmpty ? 'Please enter a food name' : null,
+                  onSaved: (value) => foodName = value!,
+                ),
+                TextFormField(
+                  decoration: const InputDecoration(labelText: 'Price'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) => value!.isEmpty ? 'Please enter a price' : null,
+                  onSaved: (value) => price = double.tryParse(value!) ?? 0,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('Add'),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  formKey.currentState!.save();
+                  Navigator.of(context).pop({'foodName': foodName, 'price': price});
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showExtraExpensesDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    final formKey = GlobalKey<FormState>();
+    String itemName = existingItem?['itemName']?.toString() ?? '';
+    double price = existingItem?['price']?.toDouble() ?? 0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(existingItem == null ? 'Add Extra Expense' : 'Edit Extra Expense'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  initialValue: itemName,
+                  decoration: const InputDecoration(labelText: 'Item'),
+                  validator: (value) => value!.isEmpty ? 'Please enter an item name' : null,
+                  onSaved: (value) => itemName = value!,
+                ),
+                TextFormField(
+                  initialValue: price.toString(),
+                  decoration: const InputDecoration(labelText: 'Price'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) => value!.isEmpty ? 'Please enter a price' : null,
+                  onSaved: (value) => price = double.tryParse(value!) ?? 0,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('Save'),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  formKey.currentState!.save();
+                  final newData = {
+                    'itemName': itemName,
+                    'price': price,
+                  };
+                  _saveItem(category, oldItemName, newData);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _saveItem(String category, String? oldItemName, Map<String, dynamic> newData) {
+    String key = newData['foodName']?.toString() ?? newData['itemName']?.toString() ?? '';
+    if (key.isEmpty) {
+      _showErrorDialog('Failed to save data: Item name is empty');
+      return;
+    }
+
+    if (oldItemName != null && oldItemName != key) {
+      StorageUtil.deleteItem(category, oldItemName).then((_) {
+        StorageUtil.saveData(category, key, newData).then((_) {
+          _loadUserData();
+          Navigator.of(context).pop();
+        }).catchError((error) {
+          _showErrorDialog('Failed to save data: $error');
+        });
+      });
+    } else {
+      StorageUtil.saveData(category, key, newData).then((_) {
+        _loadUserData();
+        Navigator.of(context).pop();
+      }).catchError((error) {
+        _showErrorDialog('Failed to save data: $error');
+      });
+    }
   }
 
   Future<bool> _showDeleteConfirmationDialog(String category, String itemName) async {

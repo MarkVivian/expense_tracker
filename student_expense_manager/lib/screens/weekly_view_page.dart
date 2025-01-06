@@ -5,7 +5,14 @@ import 'package:flutter/material.dart';
 import '../utils/preferences.dart';
 import '../utils/weekly_storage_util.dart';
 import '../utils/ai_functionality.dart';
-
+// todo : using the weekly_view_page.dart i have provided. the 3 rectangles containing
+// todo : food name, serving and price for each meal for each day .. i want when any of
+// todo: the three rectangles are clicked it opens a dialog box containing the food items ,
+// todo : and their price which in this case will be food item and price as the place holders
+// todo : for the actual data . in this dialog box there will be a choose option and a cancel option
+// todo: in the middle which when choose option is clicked will only leave the selected option as
+// todo : colored but the rest 2 will have a grey background with white text. when cancel option is
+// todo : clicked it then closes so that the user can select another option.
 class WeeklyViewPage extends StatefulWidget {
   const WeeklyViewPage({Key? key}) : super(key: key);
 
@@ -148,7 +155,7 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> with SingleTickerProvid
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Preferences.accentColor
+                  backgroundColor: Preferences.accentColor,
                 ),
                 child: Text(
                     'Submit',
