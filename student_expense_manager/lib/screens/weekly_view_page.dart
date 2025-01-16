@@ -103,6 +103,7 @@ class _WeeklyViewPageState extends State<WeeklyViewPage> with SingleTickerProvid
     AIUtility util = AIUtility();
     await Future.delayed(Duration(seconds: 1));
     util.displayAllData();
+    util.generate_meal_plans();
 
     // will load the data after it has been refreshed.
     await _loadWeeklyData();

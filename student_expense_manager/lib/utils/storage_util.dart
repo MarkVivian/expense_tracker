@@ -39,29 +39,9 @@ class StorageUtil {
       'vegetables': {},
       'breakfast combos': {},
       'meal combos': {},
-      'extra expenses': {},
+      'extra expenses (e.g. fifa, drinking)': {},
     };
   }
-
-  // 'proteins': {
-  // {"foodName": "Beans", "price": "60.0", "totalServings": "All", "eachServings": "All"},
-  // {"foodName": "peas", "price": "60.0", "totalServings": "All", "eachServings": "All"},
-  // {"foodName": "meat", "price": "200.0", "totalServings": "All", "eachServings": "All"},
-  // {"foodName": "eggs", "price": "30.0", "totalServings": "All", "eachServings": "All"},
-  // {"foodName": "sossi", "price": "90.0", "totalServings": "All", "eachServings": "All"}
-  // },
-  // 'carbohydrates': {
-  // {"foodName": "rice" , "price": "120.0", "totalServings": 3, "eachServings": "1 1/2"},
-  // {"foodName": "ugali", "price": "100.0", "totalServings": 1, "eachServings": "1/2"},
-  // {"foodName": "chapati", "price": "40.0", "totalServings": "All", "eachServings": "All"}
-  // },
-  // 'vegetables': {
-  // {"foodName": "cabbage", "price": "20.0", "totalServings": "All", "eachServings": "All"},
-  // {"foodName": "spinach", "price": "20.0", "totalServings": "All", "eachServings": "All"}
-  // },
-  // 'breakfast combos': {},
-  // 'meal combos': {},
-  // 'extra expenses': {},
 
   /// Request storage permission for Android devices
   static Future<bool> _requestStoragePermission() async {

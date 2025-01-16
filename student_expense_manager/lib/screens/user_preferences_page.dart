@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/preferences.dart';
 import '../utils/storage_util.dart';
 
+// todo : maybe put a mechanic to use the proteins, carbs, and vegetables when creating meal plans.
 class UserPreferencesPage extends StatefulWidget {
   const UserPreferencesPage({Key? key}) : super(key: key);
 

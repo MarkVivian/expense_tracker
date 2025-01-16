@@ -55,7 +55,7 @@ class Preferences {
   static const List<String> preferencesCategories = [
     'Proteins',
     'Carbohydrates',
-    'Vegetables',
+    'Vegetables and fruits',
     'Breakfast combos',
     'Meal combos',
     'Extra Expenses (e.g. fifa, drinking)'
