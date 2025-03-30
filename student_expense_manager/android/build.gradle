@@ -3,6 +3,17 @@ allprojects {
         google()
         mavenCentral()
     }
+
+}
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.4'  // Make sure to include the Android Gradle Plugin
+        classpath 'com.google.gms:google-services:4.4.2'   // Firebase plugin
+    }
 }
 
 rootProject.buildDir = "../build"

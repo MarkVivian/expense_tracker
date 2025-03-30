@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../utils/preferences.dart';
 import '../utils/storage_util.dart';
+import '../utils/AutoBackups.dart';
+import '../utils/weekly_trainer.dart';
+import '../utils/firebase_controller.dart';
+import 'package:intl/intl.dart';
 
-// todo : maybe put a mechanic to use the proteins, carbs, and vegetables when creating meal plans.
 class UserPreferencesPage extends StatefulWidget {
   const UserPreferencesPage({Key? key}) : super(key: key);
 
@@ -10,14 +14,110 @@ class UserPreferencesPage extends StatefulWidget {
   _UserPreferencesPageState createState() => _UserPreferencesPageState();
 }
 
-class _UserPreferencesPageState extends State<UserPreferencesPage> {
+class _UserPreferencesPageState extends State<UserPreferencesPage> with WidgetsBindingObserver {
   int _expandedIndex = -1;
   Map<String, dynamic> _userData = {};
+  final AutoBackups _autoBackups = AutoBackups();
+  final FirebaseController _firebaseController = FirebaseController();
+  bool _isCheckingBackups = false;
+  bool _isProcessingBackup = false;
+  Map<String, Map<String, dynamic>> _categoryRequirements = {};
+  bool _isLoadingRequirements = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeAndLoadData();
+    _checkForFirstTimeBackup();
+    _loadCategoryRequirements();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Store a reference to the scaffold messenger
+    ScaffoldMessenger.of(context);
+  }
+
+  Future<void> _loadCategoryRequirements() async {
+    setState(() {
+      _isLoadingRequirements = true;
+    });
+
+    try {
+      final requirements = await WeeklyTrainer().getCategoryRequirementsStatus();
+      setState(() {
+        _categoryRequirements = requirements;
+        _isLoadingRequirements = false;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading category requirements: $e');
+      }
+      setState(() {
+        _isLoadingRequirements = false;
+      });
+    }
+  }
+
+  Future<void> _checkForFirstTimeBackup() async {
+    if (await _autoBackups.hasFirstTimeBackup()) {
+      // Show dialog to user about first-time backup
+      if (mounted) {
+        _showFirstTimeBackupDialog();
+      }
+    }
+  }
+
+  void _showFirstTimeBackupDialog() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Existing Data Found'),
+        content: Text(
+            'We found existing data in your account backup, but you have fewer items on this device. '
+                'Would you like to restore your data from the cloud?'
+        ),
+        actions: [
+          TextButton(
+            child: Text('No, Keep Current Data'),
+            onPressed: () {
+              _autoBackups.clearFirstTimeBackupFlag();
+              _performBackup();
+              Navigator.of(context).pop();
+            },
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Preferences.accentColor,
+            ),
+            child: Text('Yes, Restore My Data'),
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final success = await _autoBackups.handleFirstTimeBackup();
+              if (success && mounted) {
+                _loadUserData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Your data has been restored'))
+                );
+              } else if (mounted) {
+                _showErrorDialog('Failed to restore data. Please try again later.');
+              }
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initializeAndLoadData() async {
@@ -25,22 +125,32 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
       await StorageUtil.createJsonIfNotExists();
       await _loadUserData();
     } catch (e) {
-      _showErrorDialog('Failed to initialize data: $e');
+      if (mounted) {
+        _showErrorDialog('Failed to initialize data: $e');
+      }
     }
   }
 
   Future<void> _loadUserData() async {
     try {
       final data = await StorageUtil.loadData();
-      setState(() {
-        _userData = data;
-      });
+      if (mounted) {
+        setState(() {
+          _userData = data;
+        });
+        // Refresh category requirements after loading user data
+        _loadCategoryRequirements();
+      }
     } catch (e) {
-      _showErrorDialog('Failed to load data: $e');
+      if (mounted) {
+        _showErrorDialog('Failed to load data: $e');
+      }
     }
   }
 
   void _showErrorDialog(String message) {
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -64,7 +174,12 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('User Preferences', style: Preferences.headlineStyle),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildBackupButton(),
+              ],
+            ),
             const SizedBox(height: 16),
             ...List.generate(
               Preferences.preferencesCategories.length,
@@ -76,12 +191,310 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
     );
   }
 
+  Widget _buildBackupButton() {
+    return ElevatedButton.icon(
+      onPressed: (_isCheckingBackups || _isProcessingBackup) ? null : _showBackupOptions,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Preferences.accentColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      icon: Icon(_isCheckingBackups || _isProcessingBackup ? Icons.hourglass_empty : Icons.history),
+      label: Text(_isCheckingBackups ? 'Loading...' : (_isProcessingBackup ? 'Processing...' : 'Backups')),
+    );
+  }
+
+  Future<void> _performBackup() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isProcessingBackup = true;
+    });
+
+    try {
+      final result = await _autoBackups.forceBackup();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isProcessingBackup = false;
+      });
+
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Backup created successfully'))
+          );
+        }
+      } else {
+        _showErrorDialog('Backup failed: ${result['message']}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isProcessingBackup = false;
+      });
+
+      _showErrorDialog('Failed to create backup: $e');
+    }
+  }
+
+  Future<void> _showBackupOptions() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isCheckingBackups = true;
+    });
+
+    try {
+      final backupVersions = await _autoBackups.getBackupVersions();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isCheckingBackups = false;
+      });
+
+      if (backupVersions['current'] == null && backupVersions['previous'] == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No backups available yet'))
+        );
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Preferences.backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (context) => _buildBackupOptionsSheet(backupVersions),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isCheckingBackups = false;
+      });
+
+      _showErrorDialog('Failed to load backup options: $e');
+    }
+  }
+
+  Widget _buildBackupOptionsSheet(Map<String, dynamic> backupVersions) {
+    final lastBackupTime = backupVersions['lastBackupTime'] != null
+        ? DateFormat('MMM d, yyyy h:mm a').format(DateTime.parse(backupVersions['lastBackupTime']))
+        : 'Never';
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Data Backups',
+                      style: Preferences.headlineStyle,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Last backup: $lastBackupTime',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(color: Colors.white24),
+              ListTile(
+                leading: Icon(Icons.backup, color: Preferences.accentColor),
+                title: Text('Backup Now', style: TextStyle(color: Colors.white)),
+                subtitle: Text(
+                  'Create a new backup of your current data',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _performBackup();
+                },
+              ),
+              if (backupVersions['current'] != null)
+                ListTile(
+                  leading: Icon(Icons.restore, color: Preferences.accentColor),
+                  title: Text('Restore Current Backup', style: TextStyle(color: Colors.white)),
+                  subtitle: Text(
+                    'Restore from your most recent backup',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showRestoreConfirmationDialog('current');
+                  },
+                ),
+              if (backupVersions['previous'] != null)
+                ListTile(
+                  leading: Icon(Icons.settings_backup_restore, color: Preferences.accentColor),
+                  title: Text('Restore Previous Backup', style: TextStyle(color: Colors.white)),
+                  subtitle: Text(
+                    'Restore from your older backup',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showRestoreConfirmationDialog('previous');
+                  },
+                ),
+              if (backupVersions['current'] != null || backupVersions['previous'] != null)
+                ListTile(
+                  leading: Icon(Icons.compare_arrows, color: Preferences.accentColor),
+                  title: Text('Compare Backups', style: TextStyle(color: Colors.white)),
+                  subtitle: Text(
+                    'View differences between backups',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showBackupComparisonDialog(backupVersions);
+                  },
+                ),
+              SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showRestoreConfirmationDialog(String version) {
+    if (!mounted) return;
+
+    final versionName = version == 'current' ? 'most recent' : 'previous';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Preferences.backgroundColor,
+        title: Text('Confirm Restore'),
+        content: Text(
+            'Are you sure you want to restore from your $versionName backup? '
+                'This will replace your current data.'
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Preferences.accentColor,
+            ),
+            child: Text('Restore'),
+            onPressed: () async {
+              Navigator.of(context).pop();
+
+              final success = await _autoBackups.rollbackTo(version);
+              if (success && mounted) {
+                await _loadUserData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Data restored successfully'))
+                );
+              } else if (mounted) {
+                _showErrorDialog('Failed to restore data. Check your internet connection.');
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBackupComparisonDialog(Map<String, dynamic> backupVersions) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Preferences.backgroundColor,
+        title: Text('Backup Comparison'),
+        content: Container(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Current Backup:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              SizedBox(height: 8),
+              _buildBackupSummary(backupVersions['current']),
+              SizedBox(height: 16),
+              Text('Previous Backup:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              SizedBox(height: 8),
+              _buildBackupSummary(backupVersions['previous']),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Close'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackupSummary(Map<String, dynamic>? backupData) {
+    if (backupData == null) {
+      return Text('No backup available', style: TextStyle(color: Colors.white70, fontStyle: FontStyle.italic));
+    }
+
+    final summary = <String, int>{};
+
+    backupData.forEach((category, items) {
+      if (items is Map) {
+        summary[category] = items.length;
+      }
+    });
+
+    return Container(
+      height: 150,
+      child: ListView(
+        shrinkWrap: true,
+        children: summary.entries.map((entry) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(entry.key.capitalize(), style: TextStyle(color: Colors.white)),
+                Text('${entry.value} items', style: TextStyle(color: Preferences.accentColor)),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildExpandableRectangle(int index) {
     final isExpanded = _expandedIndex == index;
     final category = Preferences.preferencesCategories[index];
 
+    // Get requirement status for this category
+    final requirementStatus = _categoryRequirements[category.toLowerCase()];
+    final bool isMet = requirementStatus?['isMet'] ?? true;
+
+    // Determine card color based on requirements
+    final cardColor = (!_isLoadingRequirements && !isMet && category.toLowerCase() != 'extra expenses')
+        ? Colors.red.shade900  // Red for categories that don't meet requirements
+        : Preferences.secondaryColor;  // Default color otherwise
+
     return Card(
-      color: Preferences.secondaryColor,
+      color: cardColor,
       child: Column(
         children: [
           ListTile(
@@ -111,6 +524,39 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   List<Widget> _buildCategoryItems(String category) {
     final items = _userData[category.toLowerCase()] as Map<String, dynamic>? ?? {};
     final List<Widget> widgets = [];
+
+    // Get requirement status for this category
+    final requirementStatus = _categoryRequirements[category.toLowerCase()];
+    final bool isMet = requirementStatus?['isMet'] ?? true;
+    final int required = requirementStatus?['required'] ?? 0;
+    final int current = requirementStatus?['current'] ?? 0;
+
+    // Add warning message if requirements not met
+    if (!_isLoadingRequirements && !isMet && category.toLowerCase() != 'extra expenses') {
+      widgets.add(
+        Container(
+          padding: EdgeInsets.all(8),
+          margin: EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.red.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.red),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.red),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Please add at least $required items to this category (currently have $current)',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     widgets.add(
       SizedBox(
@@ -173,24 +619,20 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Replace the RichText widget with a simpler Row layout
               Row(
                 children: [
+                  Text(
+                    category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)' ? 'Item: ' : 'Food Name: ',
+                    style: Preferences.bodyStyle.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                   Expanded(
-                    child: RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)' ? 'Item: ' : 'Food Name: ',
-                            style: Preferences.bodyStyle.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                          TextSpan(
-                            text: category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)'
-                                ? item['itemName']?.toString() ?? 'N/A'
-                                : item['foodName']?.toString() ?? 'N/A',
-                            style: Preferences.majorTextStyle.copyWith(color: Colors.white),
-                          ),
-                        ],
-                      ),
+                    child: Text(
+                      category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)'
+                          ? item['itemName']?.toString() ?? 'N/A'
+                          : item['foodName']?.toString() ?? 'N/A',
+                      style: Preferences.majorTextStyle.copyWith(color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -256,6 +698,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   void _showItemDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    if (!mounted) return;
+
     if (category.toLowerCase() == 'breakfast combos' || category.toLowerCase() == 'meal combos') {
       _showComboDialog(category, oldItemName, existingItem);
     } else if (category.toLowerCase() == 'extra expenses (e.g. fifa, drinking)') {
@@ -266,6 +710,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   void _showRegularItemDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    if (!mounted) return;
+
     final formKey = GlobalKey<FormState>();
     String foodName = existingItem?['foodName']?.toString() ?? '';
     double price = existingItem?['price']?.toDouble() ?? 0;
@@ -365,6 +811,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   void _showComboDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    if (!mounted) return;
+
     List<Map<String, dynamic>> comboItems = [];
     if (existingItem != null && existingItem['items'] != null) {
       comboItems = List<Map<String, dynamic>>.from(existingItem['items']);
@@ -440,6 +888,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   Future<Map<String, dynamic>?> _showAddComboItemDialog() async {
+    if (!mounted) return null;
+
     final formKey = GlobalKey<FormState>();
     String foodName = '';
     double price = 0;
@@ -489,6 +939,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   void _showExtraExpensesDialog(String category, String? oldItemName, Map<String, dynamic>? existingItem) {
+    if (!mounted) return;
+
     final formKey = GlobalKey<FormState>();
     String itemName = existingItem?['itemName']?.toString() ?? '';
     double price = existingItem?['price']?.toDouble() ?? 0;
@@ -545,6 +997,8 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
   }
 
   void _saveItem(String category, String? oldItemName, Map<String, dynamic> newData) {
+    if (!mounted) return;
+
     String key = newData['foodName']?.toString() ?? newData['itemName']?.toString() ?? '';
     if (key.isEmpty) {
       _showErrorDialog('Failed to save data: Item name is empty');
@@ -557,7 +1011,9 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
           _loadUserData();
           Navigator.of(context).pop();
         }).catchError((error) {
-          _showErrorDialog('Failed to save data: $error');
+          if (mounted) {
+            _showErrorDialog('Failed to save data: $error');
+          }
         });
       });
     } else {
@@ -565,12 +1021,16 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
         _loadUserData();
         Navigator.of(context).pop();
       }).catchError((error) {
-        _showErrorDialog('Failed to save data: $error');
+        if (mounted) {
+          _showErrorDialog('Failed to save data: $error');
+        }
       });
     }
   }
 
   Future<bool> _showDeleteConfirmationDialog(String category, String itemName) async {
+    if (!mounted) return false;
+
     return await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -597,6 +1057,13 @@ class _UserPreferencesPageState extends State<UserPreferencesPage> {
         );
       },
     ) ?? false;
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    if (this.isEmpty) return this;
+    return "${this[0].toUpperCase()}${this.substring(1)}";
   }
 }
 

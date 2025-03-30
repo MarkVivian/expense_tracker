@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 class Preferences {
   // Colors
   static const Color primaryColor = Color(0xFF4A148C); // Deep Purple
-  static const Color secondaryColor = Color(0xFF7B1FA2); // Purple
-  static const Color accentColor = Color(0xFFAB47BC); // Light Purple
+  static const Color secondaryColor = Color(0xFF330942); // Purple
+  static const Color accentColor = Color(0xFF34007E); // Light Purple
   static const Color backgroundColor = Color(0xFF121212); // Dark background
   static const Color pastColor = Color(0xFF424242); // Grey for past days/meals
   static const Color currentColor = Color(0xFF6A1B9A); // Vivid Purple for current day/meal

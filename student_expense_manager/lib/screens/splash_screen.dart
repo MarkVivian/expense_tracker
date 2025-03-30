@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/preferences.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({Key? key}) : super(key: key);
 
   @override
   _SplashScreenState createState() => _SplashScreenState();
@@ -13,7 +13,7 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     Future.delayed(Preferences.splashDuration, () {
-      Navigator.of(context).pushReplacementNamed('/home');
+      Navigator.of(context).pushReplacementNamed('/auth');
     });
   }
 
@@ -25,10 +25,23 @@ class _SplashScreenState extends State<SplashScreen> {
           gradient: Preferences.splashGradient,
         ),
         child: Center(
-          child: Image.asset(
-            Preferences.placeholderImage,
-            width: Preferences.splashImageSize,
-            height: Preferences.splashImageSize,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                Preferences.placeholderImage,
+                width: Preferences.splashImageSize,
+                height: Preferences.splashImageSize,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Meal Planner',
+                style: Preferences.headlineStyle.copyWith(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ),
       ),
